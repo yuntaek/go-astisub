@@ -158,6 +158,11 @@ func (c *Color) TTMLString() string {
 	return fmt.Sprintf("%.6x", uint32(c.Red)<<16|uint32(c.Green)<<8|uint32(c.Blue))
 }
 
+type Point struct {
+	X int
+	Y int
+}
+
 // StyleAttributes represents style attributes
 type StyleAttributes struct {
 	SSAAlignment         *int
@@ -196,40 +201,41 @@ type StyleAttributes struct {
 	TeletextSpacesAfter  *int
 	TeletextSpacesBefore *int
 	// TODO Use pointers with real types below
-	TTMLBackgroundColor  string // https://htmlcolorcodes.com/fr/
-	TTMLColor            string
-	TTMLDirection        string
-	TTMLDisplay          string
-	TTMLDisplayAlign     string
-	TTMLExtent           string
-	TTMLFontFamily       string
-	TTMLFontSize         string
-	TTMLFontStyle        string
-	TTMLFontWeight       string
-	TTMLLineHeight       string
-	TTMLOpacity          string
-	TTMLOrigin           string
-	TTMLOverflow         string
-	TTMLPadding          string
-	TTMLShowBackground   string
-	TTMLTextAlign        string
-	TTMLTextDecoration   string
-	TTMLTextOutline      string
-	TTMLUnicodeBidi      string
-	TTMLVisibility       string
-	TTMLWrapOption       string
-	TTMLWritingMode      string
-	TTMLZIndex           int
-	WebVTTAlign          string
-	WebVTTLine           string
-	WebVTTLines          int
-	WebVTTPosition       string
-	WebVTTRegionAnchor   string
-	WebVTTScroll         string
-	WebVTTSize           string
+	TTMLBackgroundColor string // https://htmlcolorcodes.com/fr/
+	TTMLColor           string
+	TTMLDirection       string
+	TTMLDisplay         string
+	TTMLDisplayAlign    string
+	TTMLExtent          string
+	TTMLFontFamily      string
+	TTMLFontSize        string
+	TTMLFontStyle       string
+	TTMLFontWeight      string
+	TTMLLineHeight      string
+	TTMLOpacity         string
+	TTMLOrigin          string
+	TTMLOverflow        string
+	TTMLPadding         string
+	TTMLShowBackground  string
+	TTMLTextAlign       string
+	TTMLTextDecoration  string
+	TTMLTextOutline     string
+	TTMLUnicodeBidi     string
+	TTMLVisibility      string
+	TTMLWrapOption      string
+	TTMLWritingMode     string
+	TTMLZIndex          int
+
+	WebVTTCueAlign       string
+	WebVTTCueLine        string
+	WebVTTRegionLines    int
+	WebVTTCuePosition    string
+	WebVTTRegionAnchor   *Point
+	WebVTTRegionScroll   string
+	WebVTTCueSize        string
 	WebVTTVertical       string
-	WebVTTViewportAnchor string
-	WebVTTWidth          string
+	WebVTTViewportAnchor *Point
+	WebVTTWidth          int
 }
 
 func (sa *StyleAttributes) propagateSSAAttributes() {}

@@ -1,11 +1,11 @@
-package astisub_test
+package webvtt_test
 
 import (
 	"bytes"
 	"io/ioutil"
 	"testing"
 
-	"github.com/asticode/go-astisub"
+	astisub "github.com/go-astisub"
 	"github.com/stretchr/testify/assert"
 )
 

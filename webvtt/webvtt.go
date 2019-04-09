@@ -1,9 +1,10 @@
-package astisub
+package webvtt
 
 import (
 	"bufio"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -15,13 +16,28 @@ import (
 
 // https://www.w3.org/TR/webvtt1/
 
+// AnchorPoint for  anchor point
+type Point struct {
+	X int
+	Y int
+}
+
 // Constants
 const (
-	webvttBlockNameComment        = "comment"
-	webvttBlockNameRegion         = "region"
-	webvttBlockNameStyle          = "style"
-	webvttBlockNameText           = "text"
-	webvttTimeBoundariesSeparator = " --> "
+	webvttBlockNameComment        = "NOTE"
+	webvttBlockNameRegion         = "REGION"
+	webvttBlockNameStyle          = "STYLE"
+	webvttBlockNameCue            = "CUE"
+	webvttTimeBoundariesSeparator = "--> "
+)
+
+// Regular expression patterns
+var (
+	RegExprComment                  = regexp.MustCompile(`^NOTE\b\s*`)
+	RegExprRegion                   = regexp.MustCompile(`^REGION\s*$`)
+	RegExprStyle                    = regexp.MustCompile(`^STYLE\s*$`)
+	RegExprRegionComponentDelimiter = regexp.MustCompile(`\s*`)
+	REgExprSignature                = regexp.MustCompile(`^WEBVTT\s*`)
 )
 
 // Vars
@@ -34,6 +50,19 @@ func parseDurationWebVTT(i string) (time.Duration, error) {
 	return parseDuration(i, ".", 3)
 }
 
+// Identify block type
+func identifyBlockType(line string, expectedType string) bool {
+	switch expectedType {
+	case webvttBlockNameComment:
+		return RegExprComment.MatchString(line)
+	case webvttBlockNameRegion:
+		return RegExprRegion.MatchString(line)
+	case webvttBlockNameStyle:
+		return RegExprStyle.MatchString(line)
+	}
+	return false
+}
+
 // ReadFromWebVTT parses a .vtt content
 // TODO Tags (u, i, b)
 // TODO Class
@@ -43,19 +72,35 @@ func ReadFromWebVTT(i io.Reader) (o *Subtitles, err error) {
 	o = NewSubtitles()
 	var scanner = bufio.NewScanner(i)
 	var line string
+	var isWEBVTT = false
+	var seenCue = false
 
 	// Skip the header
 	for scanner.Scan() {
 		line = scanner.Text()
+		// replace all NULL characters by REPLACEMENT characters
+		line = strings.Replace(line, "\u0000", "\uFFFD", -1)
+		// replace crlf by lf
+		line = strings.Replace(line, "\u000D\u000A", "\u000D", -1)
+		// replace cr by lf
+		line = strings.Replace(line, "\u000A", "\u000D", -1)
+		// Skip byte Order Mark(BOM), Mark is optional
 		line = strings.TrimPrefix(line, string(BytesBOM))
-		if len(line) > 0 && strings.Fields(line)[0] == "WEBVTT" {
+		if len(line) > 0 && REgExprSignature.MatchString(line) {
+			isWEBVTT = true
 			break
 		}
 	}
+	// validate webvtt file signature
+	if !isWEBVTT {
+		err = errors.Wrap(err, "astisub: it is not webvtt file, no webvtt signiture\"WEBVTT\"")
+		return
+	}
 
-	// Scan
+	// Scan webVTT  body
 	var item = &Item{}
 	var blockName string
+	var id string
 	var comments []string
 	for scanner.Scan() {
 		// Fetch line
@@ -63,55 +108,24 @@ func ReadFromWebVTT(i io.Reader) (o *Subtitles, err error) {
 		// Check prefixes
 		switch {
 		// Comment
-		case strings.HasPrefix(line, "NOTE "):
+		case strings.HasPrefix(line, webvttBlockNameComment):
 			blockName = webvttBlockNameComment
-			comments = append(comments, strings.TrimPrefix(line, "NOTE "))
+			comments = append(comments, RegExprComment.ReplaceAllString(line, ""))
 		// Empty line
 		case len(line) == 0:
 			// Reset block name
 			blockName = ""
-		// Region
-		case strings.HasPrefix(line, "Region: "):
-			// Add region styles
-			var r = &Region{InlineStyle: &StyleAttributes{}}
-			for _, part := range strings.Split(strings.TrimPrefix(line, "Region: "), " ") {
-				// Split on "="
-				var split = strings.Split(part, "=")
-				if len(split) <= 1 {
-					err = fmt.Errorf("astisub: Invalid region style %s", part)
-					return
-				}
+		// Region definition Block
+		case strings.HasPrefix(line, "REGION"):
+			blockName = webvttBlockNameRegion
 
-				// Switch on key
-				switch split[0] {
-				case "id":
-					r.ID = split[1]
-				case "lines":
-					if r.InlineStyle.WebVTTLines, err = strconv.Atoi(split[1]); err != nil {
-						err = errors.Wrapf(err, "atoi of %s failed", split[1])
-						return
-					}
-				case "regionanchor":
-					r.InlineStyle.WebVTTRegionAnchor = split[1]
-				case "scroll":
-					r.InlineStyle.WebVTTScroll = split[1]
-				case "viewportanchor":
-					r.InlineStyle.WebVTTViewportAnchor = split[1]
-				case "width":
-					r.InlineStyle.WebVTTWidth = split[1]
-				}
-			}
-			r.InlineStyle.propagateWebVTTAttributes()
-
-			// Add region
-			o.Regions[r.ID] = r
 		// Style
-		case strings.HasPrefix(line, "STYLE "):
+		case strings.HasPrefix(line, "STYLE"):
 			blockName = webvttBlockNameStyle
 		// Time boundaries
 		case strings.Contains(line, webvttTimeBoundariesSeparator):
 			// Set block name
-			blockName = webvttBlockNameText
+			blockName = webvttBlockNameCue
 
 			// Init new item
 			item = &Item{
@@ -180,10 +194,32 @@ func ReadFromWebVTT(i io.Reader) (o *Subtitles, err error) {
 			case webvttBlockNameComment:
 				comments = append(comments, line)
 			case webvttBlockNameStyle:
-				// TODO Do something with the style
-			case webvttBlockNameText:
+			case webvttBlockNameCue:
 				item.Lines = append(item.Lines, Line{Items: []LineItem{{Text: line}}})
+			case webvttBlockNameRegion:
+				for word := range RegExprRegionComponentDelimiter.Split(line, -1) {
+					component := strings.Split(word, ":")
+					switch component[0] {
+					case "id":
+						id = component[1]
+						o.Regions[id] = &Region{ID: id}
+						o.Regions[id].InlineStyle.WebVTTWidth = 100
+						o.Regions[id].InlineStyle.WebVTTLines = 3
+						o.Regions[id].InlineStyle.WebVTTRegionAnchor = component[1]
+					case "width":
+						o.Regions[id].InlineStyle.WebVTTWidth = component[1]
+					case "lines":
+						o.Regions[id].InlineStyle.WebVTTLines = component[1]
+					case "regionanchor":
+						o.Regions[id].InlineStyle.WebVTTRegionAnchor = component[1]
+					case "viewportanchor":
+						o.Regions[id].InlineStyle.WebVTTViewportAnchor = component[1]
+					case "scroll":
+						o.Regions[id].InlineStyle.WebVTTScroll = component[1]
+					}
+				}
 			default:
+
 				// This is the ID
 				// TODO Do something with the id
 			}

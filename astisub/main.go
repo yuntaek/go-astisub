@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 
-	"github.com/asticode/go-astilog"
-	"github.com/asticode/go-astisub"
-	"github.com/asticode/go-astitools/flag"
+	astilog "github.com/asticode/go-astilog"
+	astiflag "github.com/asticode/go-astitools/flag"
+	astisub "github.com/go-astisub"
 )
 
 // Flags
